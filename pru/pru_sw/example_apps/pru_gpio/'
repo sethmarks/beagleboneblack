@@ -1,0 +1,225 @@
+/*****************************************************************************
+* Include Files                                                              *
+*****************************************************************************/
+
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include <dirent.h>
+#include <signal.h>
+
+// Driver header file
+#include <prussdrv.h>
+#include <pruss_intc_mapping.h>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+
+
+/*****************************************************************************
+* Explicit External Declarations                                             *
+*****************************************************************************/
+
+/*****************************************************************************
+* Local Macro Declarations                                                   *
+*****************************************************************************/
+
+#define PRU_NUM 	0
+
+// This pin is GPIO1_13 pin 11 on the P8 header
+#define DMX_PIN (13)
+#define DMX_CHANNELS (4)
+
+#define CMD_VALUE     (1)
+#define CMD_PARAMETER (2)      //Memory OFFSET for the parameter
+#define CMD_RESULT    (3)      //Response back to application
+
+#define CMD_NO_OP	  2
+#define CMD_SET_PIN       3
+#define CMD_CLEAR_PIN     4
+#define CMD_READ_PIN      5
+
+
+
+#define UDP_PORT (9930)
+#define UDP_BUFLEN (512)
+
+#define AM33XX
+
+/*****************************************************************************
+* Local Typedef Declarations                                                 *
+*****************************************************************************/
+
+
+/*****************************************************************************
+* Local Function Declarations                                                *
+*****************************************************************************/
+
+static int LOCAL_exampleInit ();
+static void LOCAL_export_pin (int,char*);
+static void LOCAL_unexport_pin (int);
+
+/*****************************************************************************
+* Local Variable Definitions                                                 *
+*****************************************************************************/
+
+
+/*****************************************************************************
+* Intertupt Service Routines                                                 *
+*****************************************************************************/
+
+
+/*****************************************************************************
+* Global Variable Definitions                                                *
+*****************************************************************************/
+
+static volatile void *pruDataMem;
+static volatile unsigned char *pruDataMem_byte;
+
+static int udp_forever = 1;
+
+void set_pin(int pin);
+void clear_pin(int pin);
+char read_pin(int pin);
+
+
+/*****************************************************************************
+* Global Function Definitions                                                *
+*****************************************************************************/
+
+int main (void)
+{
+    unsigned int ret, i, j, k;
+    tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
+    
+    printf("\nINFO: Starting %s example.\r\n", "dmx");
+    /* Initialize the PRU */
+    prussdrv_init ();		
+
+    LOCAL_export_pin(32 + 16,"out"); //GPIO1_16
+    LOCAL_export_pin(32 + DMX_PIN,"out");  //GPIO1_13
+    LOCAL_export_pin(32 + 14, "in");
+ 
+    /* Open PRU Interrupt */
+    ret = prussdrv_open(PRU_EVTOUT_0);
+    if (ret)
+    {
+        printf("prussdrv_open open failed\n");
+        return (ret);
+    }
+    
+    /* Get the interrupt initialized */
+    prussdrv_pruintc_init(&pruss_intc_initdata);
+
+    /* Initialize example */
+    printf("\tINFO: Initializing example.\r\n");
+    LOCAL_exampleInit();
+
+   //Start th emain loop
+    pruDataMem_byte[CMD_VALUE] = CMD_NO_OP + 33;
+
+    
+    /* Execute example on PRU */
+    printf("\tINFO: Executing example.\r\n");
+    prussdrv_exec_program (PRU_NUM, "./bin/dmx.bin");
+    //LOCAL_udp_listen();
+ 
+    printf("Changing the value\n");
+    clear_pin(14);
+
+    while(1)
+    {
+//       set_pin(16);
+//       clear_pin(16);
+//       set_pin(13);
+       set_pin(14);
+//       clear_pin(13);
+//       printf("PIN:0x%x \n",read_pin(14));
+       printf("DATA:  0x%x, 0x%x, 0x%x, 0x%x (0x%x)\n",pruDataMem_byte[CMD_RESULT], pruDataMem_byte[CMD_RESULT+1],pruDataMem_byte[CMD_RESULT+2],pruDataMem_byte[CMD_RESULT+3],pruDataMem_byte[CMD_RESULT+4]);
+
+    }
+    
+    /* Wait until PRU0 has finished execution */
+    printf("\tINFO: Waiting for HALT command.\r\n");
+    prussdrv_pru_wait_event (PRU_EVTOUT_0);
+    printf("\tINFO: PRU completed transfer.\r\n");
+    prussdrv_pru_clear_event (PRU0_ARM_INTERRUPT);
+
+    /* Disable PRU and close memory mapping*/
+    prussdrv_pru_disable (PRU_NUM);
+    prussdrv_exit ();
+
+    LOCAL_unexport_pin(38);
+
+    return(0);
+
+}
+
+void set_pin(int pin)
+{
+   pruDataMem_byte[CMD_VALUE] = CMD_SET_PIN;
+   pruDataMem_byte[CMD_PARAMETER] = pin;
+   while(pruDataMem_byte[CMD_VALUE] != CMD_NO_OP);
+}
+
+void clear_pin(int pin)
+{
+   pruDataMem_byte[CMD_VALUE] = CMD_CLEAR_PIN;
+   pruDataMem_byte[CMD_PARAMETER] = pin;
+   while(pruDataMem_byte[CMD_VALUE] != CMD_NO_OP);
+}
+
+char read_pin(int pin)
+{
+   pruDataMem_byte[CMD_VALUE] = CMD_READ_PIN;
+   pruDataMem_byte[CMD_PARAMETER] = pin;
+   pin = pruDataMem_byte[CMD_PARAMETER];
+   printf("pin is %d\n",pin);
+   while(pruDataMem_byte[CMD_VALUE] != CMD_NO_OP);
+   return(pruDataMem_byte[CMD_RESULT]);
+}
+/*****************************************************************************
+* Local Function Definitions                                                 *
+*****************************************************************************/
+
+static int LOCAL_exampleInit ()
+{  
+    int i;
+
+    prussdrv_map_prumem (PRUSS0_PRU0_DATARAM, &pruDataMem);
+    pruDataMem_byte = (unsigned char*) pruDataMem;
+
+    pruDataMem_byte[CMD_VALUE] = CMD_NO_OP;
+    pruDataMem_byte[CMD_PARAMETER] = 0;
+    pruDataMem_byte[CMD_RESULT] = 0;
+
+    return(0);
+}
+
+static void LOCAL_export_pin (int pin, char *dir) {
+	FILE *file;
+	char dir_file_name[50];
+
+	// Export the GPIO pin
+	file = fopen("/sys/class/gpio/export", "w");
+	fprintf(file, "%d", pin);
+	fclose(file);
+
+	// Let GPIO know what direction we are writing
+	sprintf(dir_file_name, "/sys/class/gpio/gpio%d/direction", pin);
+	file = fopen(dir_file_name, "w");
+	fprintf(file, "%s",dir);
+	fclose(file);
+}
+
+static void LOCAL_unexport_pin (int pin) {
+	FILE *file;
+	file = fopen("/sys/class/gpio/unexport", "w");
+	fwrite(&pin, 4, 1, file);
+	fclose(file);
+}
+

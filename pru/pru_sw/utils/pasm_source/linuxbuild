@@ -1,0 +1,4 @@
+#!/bin/sh
+gcc -Wall -mtune=cortex-a8 -march=armv7-a -D_UNIX_ pasm.c pasmpp.c pasmexp.c pasmop.c pasmdot.c pasmstruct.c pasmmacro.c -o ../pasm
+
+

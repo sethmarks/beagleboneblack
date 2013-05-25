@@ -1,0 +1,14 @@
+APP_DIRS :=
+
+APP_DIRS += pru_gpio 
+
+
+ASSEM_FILES :=
+
+ASSEM_FILES += pru_gpio/pru_gpio.p
+
+
+BIN_FILES :=
+
+BIN_FILES += pru_gpio.bin
+
