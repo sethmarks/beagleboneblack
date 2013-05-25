@@ -1,4 +1,4 @@
-beableboneblack
+beagleboneblack
 ===============
 
 Random Beaglebone Black (BBB) Code
