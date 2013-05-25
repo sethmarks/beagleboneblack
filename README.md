@@ -10,6 +10,7 @@ In particular the kernel change to 3.8 seemed to change some basic operations of
 w1-gpio via device trees and the changes in the pinmux interface.
 
 Included in this repository are the following:
+
 1) A working device tree "firmware" file that enables w1-gpio to function in the BBB.
    I use the ubuntu disto for the BBB so Angstrom may or may not have the same results.
    On ubuntu the w1-gpio driver is build in the standard kernel from:

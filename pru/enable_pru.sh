@@ -1,0 +1,39 @@
+#!/bin/bash
+
+progress_and_delay () {
+    echo -n "."
+    sleep 1
+}
+
+
+SLOTS=/sys/devices/bone_capemgr.*/slots
+
+
+echo -n "Installing uio_pruss module ."
+
+/sbin/modprobe uio_pruss
+progress_and_delay
+
+rmmod uio_pruss
+progress_and_delay
+
+echo cape-bone-nixie > $SLOTS
+progress_and_delay
+
+/sbin/modprobe uio_pruss
+progress_and_delay
+
+echo cape-bone-nixie > $SLOTS
+progress_and_delay
+
+rmmod uio_pruss
+progress_and_delay
+
+/sbin/modprobe uio_pruss
+progress_and_delay
+
+( [ -L /sys/class/uio/uio0 ] || [ -d /sys/class/uio/uio0 ] ) && echo ' Success!' && exit 0
+
+# shouldn't get here if things worked
+echo 'Failed.'
+exit 1;
